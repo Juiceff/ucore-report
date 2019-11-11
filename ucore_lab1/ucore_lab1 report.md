@@ -121,6 +121,7 @@ set architecture i8086
 ```
 并在lab1下执行`make debug`，会弹出一个`qemu`窗口和`gdb`调试窗口，输入`si`就可以一步一步跟踪BIOS  
 ***注意：调试的代码地址采用段存储机制，需要进行偏移***
+!(https://github.com/Juiceff/ucore_picture/blob/master/lab1/1.png)
 ## 练习2.2 在初始化位置0x7c00设置实地址断点,测试断点正常
 修改`lab1/tools/gdbinit`文件为
 ```c
