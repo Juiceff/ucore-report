@@ -122,7 +122,7 @@ set architecture i8086
 并在lab1下执行`make debug`，会弹出一个`qemu`窗口和`gdb`调试窗口，输入`si`就可以一步一步跟踪BIOS  
 ***注意：调试的代码地址采用段存储机制，需要进行偏移***  
 ![](https://github.com/Juiceff/ucore_picture/blob/master/lab1/1.png)
-## 练习2.2 在初始化位置0x7c00设置实地址断点,测试断点正常
+## 练习2.2 在初始化位置0x7c02设置实地址断点,测试断点正常
 修改`lab1/tools/gdbinit`文件为
 ```c
 file bin/kernel
@@ -139,7 +139,7 @@ x /2i $pc
 * 第六行 x代表显示 i代表指令 $pc代表寄存器
 并在lab1下执行`make debug`，便可得到如下结果：
 ![](https://github.com/Juiceff/ucore_picture/blob/master/lab1/2.png)
-## 练习2.3 从0x7c00开始跟踪代码运行,将单步跟踪反汇编得到的代码与`bootasm.S`和`bootblock.asm`进行比较
+## 练习2.3 从0x7c02开始跟踪代码运行,将单步跟踪反汇编得到的代码与`bootasm.S`和`bootblock.asm`进行比较
 跟踪代码如下：
 ```c
 0x7c02:xor %eax,%eax
