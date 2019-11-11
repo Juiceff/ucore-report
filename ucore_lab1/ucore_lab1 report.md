@@ -107,8 +107,13 @@ dd if=bin/bootblock of=bin/ucore.img conv=notrunc
 dd if=bin/kernel of=bin/ucore.img seek=1 conv=notrunc
 ```
 ## 练习1.2 一个被系统认为是符合规范的硬盘主引导扇区的特征是什么?
+查看文件`tools/sign.c`
+```c
+   buf[510] = 0x55;
+   buf[511] = 0xAA;
+```
 1、引导扇区有512字节  
-2、最后两字节为0x55AA
+2、最后两个字节分别为0x55和0xAA
 
 ## 练习2 使用qemu执行并调试lab1中的软件
 ## 练习2.1 从 CPU 加电后执行的第一条指令开始,单步跟踪 BIOS 的执行
@@ -154,7 +159,7 @@ x /2i $pc
 ```
 与`bootasm.S`和`bootblock.asm`对比后发现一致
 ## 练习3 分析bootloader进入保护模式的过程
-1、将各个寄存器置0
+1、将各个寄存器初始化
 ```py
 .code16               # Assemble for 16-bit mode
     cli                # Disable interrupts
@@ -166,6 +171,7 @@ x /2i $pc
     movw %ax, %ss      # -> Stack Segment
 ```
 2、开启A20,为何开启？
+因为需要通过将键盘控制器上的A20线置于高电位，使得全部32条地址线可用，否则读取不了数据
 
 ```py
 seta20.1:
@@ -236,7 +242,7 @@ readsect(void *dst, uint32_t secno) {
     insl(0x1F0, dst, SECTSIZE / 4);
 }
 ```
-2、`readseg(uintptr_t va, uint32_t count, uint32_t offset)`简单包装了`readsect`，可以从设备读取任意长度的内容
+2、`readseg(uintptr_t va, uint32_t count, uint32_t offset)`调用了函数`readsect`，可以从设备读取任意长度的内容
 ```c
 readseg(uintptr_t va, uint32_t count, uint32_t offset) {
     uintptr_t end_va = va + count;
@@ -289,7 +295,7 @@ bad:
 }
 ```
 ## 练习5 实现函数调用堆栈跟踪函数 我们需要在lab1中完成`kdebug.c`中函数`print_stackframe`的实现
-参见kdebug.c代码中的注释：
+参见`kern/debug/kdebug.c`代码中的注释：
 ```c
 void print_stackframe(void) {
      /* LAB1 YOUR CODE : STEP 1 */
@@ -310,7 +316,7 @@ void print_stackframe(void) {
 ```c
 void print_stackframe(void) {      
     uint32_t ebp=read_ebp();//(1) call read_ebp() to get the value of ebp. the type is (uint32_t)
-    uint32_t eip=read_eip();//(2) call read_eip() to get the value of eip. the type is (uint32_t)
+    eip=read_eip();//(2) call read_eip() to get the value of eip. the type is (uint32_t)
     int i;
     for(i=0;i<STACKFRAME_DEPTH&&ebp!=0;i++){//(3) from 0 .. STACKFRAME_DEPTH
           cprintf("ebp:0x%08x   eip:0x%08x ",ebp,eip);//(3.1)printf value of ebp, eip
@@ -324,9 +330,13 @@ void print_stackframe(void) {
 }
 ```
 ![](https://github.com/Juiceff/ucore_picture/blob/master/lab1/3.png)
+输出与指导书类似，最后一行数值含义：
+>ebp：第一个使用堆栈的函数的地址即bootmain函数  
+eip：caller调用bootmain函数时的地址  
+其他是可能存在的参数
 ## 练习6 完善中断初始化和处理
 ## 练习6.1 中断向量表中一个表项占多少字节？其中哪几位代表中断处理代码的入口？
-中断向量表一个表项占用8字节，其中2-3字节是段选择子，0-1字节和6-7字节拼成位移，
+中断向量表一个表项占用8字节，其中2-3字节是段选择子，0-1字节和6-7字节分别为低16位和高16位的偏移量，首先通过段选择子获得段基址，加上偏移量，
 两者联合便是中断处理程序的入口地址
 ## 练习6.2 请编程完善kern/trap/trap.c中对中断向量表进行初始化的函数idt_init。在idt_init函数中，依次对所有中断入口进行初始化。使用mmu.h中的SETGATE宏，填充idt数组内容。每个中断的入口由tools/vectors.c生成，使用trap.c中声明的vectors数组即可
 可以看到函数的注释如下：
@@ -347,8 +357,8 @@ void idt_init(void) {
 }
 ```
 根据注释编写程序：  
-1、声明__vertors[],其中存放着中断服务程序的入口地址。这个数组生成于vertor.S中  
-2、填充中断描述符表IDT  
+1、声明__vertors[],其中存放着中断服务程序的入口地址 
+2、赋值中断描述符表IDT  
 3、加载中断描述符表
 ```c
 void idt_init(void) {
@@ -365,12 +375,12 @@ void idt_init(void) {
 ```c
 #define SETGATE(gate, istrap, sel, off, dpl) {  
     (gate).gd_off_15_0 = (uint32_t)(off) & 0xffff;
-    (gate).gd_ss = (sel);             
+    (gate).gd_ss = (sel); //段选择子            
     (gate).gd_args = 0;               
     (gate).gd_rsv1 = 0;               
-    (gate).gd_type = (istrap) ? STS_TG32 : STS_IG32;
+    (gate).gd_type = (istrap) ? STS_TG32 : STS_IG32;  //选择
     (gate).gd_s = 0;               
-    (gate).gd_dpl = (dpl);           
+    (gate).gd_dpl = (dpl); //设置特权级为内核级        
     (gate).gd_p = 1;               
     (gate).gd_off_31_16 = (uint32_t)(off) >> 16; 
 }
