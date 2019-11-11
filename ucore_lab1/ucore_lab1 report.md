@@ -138,7 +138,7 @@ x /2i $pc
 * 第四行b代表break设置断点为*0x7c02
 * 第六行 x代表显示 i代表指令 $pc代表寄存器
 并在lab1下执行`make debug`，便可得到如下结果：
-
+![](https://github.com/Juiceff/ucore_picture/blob/master/lab1/2.png)
 ## 练习2.3 从0x7c00开始跟踪代码运行,将单步跟踪反汇编得到的代码与`bootasm.S`和`bootblock.asm`进行比较
 跟踪代码如下：
 ```c
@@ -323,10 +323,84 @@ void print_stackframe(void) {
       }
 }
 ```
+![](https://github.com/Juiceff/ucore_picture/blob/master/lab1/3.png)
 ## 练习6 完善中断初始化和处理
 ## 练习6.1 中断向量表中一个表项占多少字节？其中哪几位代表中断处理代码的入口？
 中断向量表一个表项占用8字节，其中2-3字节是段选择子，0-1字节和6-7字节拼成位移，
 两者联合便是中断处理程序的入口地址
 ## 练习6.2 请编程完善kern/trap/trap.c中对中断向量表进行初始化的函数idt_init。在idt_init函数中，依次对所有中断入口进行初始化。使用mmu.h中的SETGATE宏，填充idt数组内容。每个中断的入口由tools/vectors.c生成，使用trap.c中声明的vectors数组即可
-
-## 练习6.3 请编程完善trap.c中的中断处理函数trap，在对时钟中断进行处理的部分填写trap函数中处理时钟中断的部分，使操作系统每遇到100次时钟中断后，调用print_ticks子程序，向屏幕上打印一行文字”100 ticks”
+可以看到函数的注释如下：
+```c
+void idt_init(void) {
+     /* LAB1 YOUR CODE : STEP 2 */
+     /* (1) Where are the entry addrs of each Interrupt Service Routine (ISR)?
+      *     All ISR's entry addrs are stored in __vectors. where is uintptr_t __vectors[] ?
+      *     __vectors[] is in kern/trap/vector.S which is produced by tools/vector.c
+      *     (try "make" command in lab1, then you will find vector.S in kern/trap DIR)
+      *     You can use  "extern uintptr_t __vectors[];" to define this extern variable which will be used later.
+      * (2) Now you should setup the entries of ISR in Interrupt Description Table (IDT).
+      *     Can you see idt[256] in this file? Yes, it's IDT! you can use SETGATE macro to setup each item of IDT
+      * (3) After setup the contents of IDT, you will let CPU know where is the IDT by using 'lidt' instruction.
+      *     You don't know the meaning of this instruction? just google it! and check the libs/x86.h to know more.
+      *     Notice: the argument of lidt is idt_pd. try to find it!
+      */
+}
+```
+根据注释编写程序：  
+1、声明__vertors[],其中存放着中断服务程序的入口地址。这个数组生成于vertor.S中  
+2、填充中断描述符表IDT  
+3、加载中断描述符表
+```c
+void idt_init(void) {
+    extern uintptr_t __vectors[];//声明__vertors[]
+    int i;
+    for(i=0;i<256;i++) {
+        SETGATE(idt[i],0,GD_KTEXT,__vectors[i],DPL_KERNEL);
+    }
+    SETGATE(idt[T_SWITCH_TOK],0,GD_KTEXT,__vectors[T_SWITCH_TOK],DPL_USER);
+    lidt(&idt_pd);//使用lidt指令加载中断描述符表
+}
+```
+打开`kern/mm/mmu.h`查看`SETGATE`定义
+```c
+#define SETGATE(gate, istrap, sel, off, dpl) {  
+    (gate).gd_off_15_0 = (uint32_t)(off) & 0xffff;
+    (gate).gd_ss = (sel);             
+    (gate).gd_args = 0;               
+    (gate).gd_rsv1 = 0;               
+    (gate).gd_type = (istrap) ? STS_TG32 : STS_IG32;
+    (gate).gd_s = 0;               
+    (gate).gd_dpl = (dpl);           
+    (gate).gd_p = 1;               
+    (gate).gd_off_31_16 = (uint32_t)(off) >> 16; 
+}
+```
+## 练习6.3 请编程完善trap.c中的中断处理函数trap，在对时钟中断进行处理的部分填写trap函数中处理时钟中断的部分，使操作系统每遇到100次时钟中断后，调用print_ticks子程序，向屏幕上打印一行文字”100 hahaha”
+查看`trap`函数，发现其调用了函数`trap_dispatch`，截取前半段：
+```c
+trap_dispatch(struct trapframe *tf) {
+    char c;
+    switch (tf->tf_trapno) {
+    case IRQ_OFFSET + IRQ_TIMER:
+        /* LAB1 YOUR CODE : STEP 3 */
+        /* handle the timer interrupt */
+        /* (1) After a timer interrupt, you should record this event using a global variable (increase it), such as ticks in kern/driver/clock.c
+         * (2) Every TICK_NUM cycle, you can print some info using a funciton, such as print_ticks().
+         * (3) Too Simple? Yes, I think so!
+         */
+        break;
+    case IRQ_OFFSET + IRQ_COM1:
+        c = cons_getc();
+        cprintf("serial [%03d] %c\n", c, c);
+        break;
+```
+根据注释编写程序实现隔100次时钟中断输出函数`print_ticks()`:
+```c
+ticks ++;
+        if (ticks % TICK_NUM == 0)//TICK_NUM定义为100
+        {
+            print_ticks();
+        }
+```
+在lab1目录下输入`make qemu`命令
+![](https://github.com/Juiceff/ucore_picture/blob/master/lab1/4.png)
